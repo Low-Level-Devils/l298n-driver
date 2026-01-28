@@ -8,14 +8,14 @@
 #![deny(clippy::large_stack_frames)]
 
 use esp_hal::clock::CpuClock;
-use esp_hal::ledc::channel::ChannelIFace;
-use esp_hal::ledc::timer::TimerIFace;
-use esp_hal::{main, peripherals};
-use esp_hal::time::{Duration, Instant, Rate};
-use log::info;
-use esp_hal::ledc::*;
-use esp_hal::gpio::*;
 use esp_hal::delay::Delay;
+use esp_hal::gpio::*;
+use esp_hal::ledc::channel::{ChannelHW, ChannelIFace};
+use esp_hal::ledc::timer::TimerIFace;
+use esp_hal::ledc::*;
+use esp_hal::main;
+use esp_hal::time::Rate;
+use log::info;
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -39,68 +39,78 @@ fn main() -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
-    //let output_config = OutputConfig::default();
-    //let mut motor_anode = Output::new(peripherals.GPIO2, Level::Low, output_config);
-    //let mut motor_cathode = Output::new(peripherals.GPIO4, Level::Low, output_config);
-
-    let mut delay = Delay::new();
+    let delay = Delay::new();
 
     let mut ledc = Ledc::new(peripherals.LEDC);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
 
+    info!("initialized ledc");
+
     let mut lstimer0 = ledc.timer::<LowSpeed>(timer::Number::Timer0);
-    lstimer0.configure(timer::config::Config {
-        duty: timer::config::Duty::Duty5Bit,
-        clock_source: timer::LSClockSource::APBClk,
-        frequency: Rate::from_hz(24),
-    }).expect("Error configuring lstimer");
+    lstimer0
+        .configure(timer::config::Config {
+            duty: timer::config::Duty::Duty12Bit,
+            clock_source: timer::LSClockSource::APBClk,
+            frequency: Rate::from_hz(10000),
+        })
+        .expect("Error configuring lstimer");
+
+    info!("initialized lstimer");
 
     let mut motor_anode_ledc_channel = ledc.channel(channel::Number::Channel0, peripherals.GPIO2);
-    motor_anode_ledc_channel.configure(channel::config::Config {
-        timer: &lstimer0,
-        duty_pct: 0,
-        drive_mode: DriveMode::PushPull
-    }).expect("Fail to configure motor anode channel");
+    motor_anode_ledc_channel
+        .configure(channel::config::Config {
+            timer: &lstimer0,
+            duty_pct: 0,
+            drive_mode: DriveMode::PushPull,
+        })
+        .expect("Fail to configure motor anode channel");
 
-    let mut motor_cathode_ledc_channel = ledc.channel(channel::Number::Channel0, peripherals.GPIO4);
-    motor_cathode_ledc_channel.configure(channel::config::Config {
-        timer: &lstimer0,
-        duty_pct: 0,
-        drive_mode: DriveMode::PushPull
-    }).expect("Fail to configure motor cathode channel");
+    info!("initialized motor anode ledc channel");
+
+    let mut motor_cathode_ledc_channel = ledc.channel(channel::Number::Channel1, peripherals.GPIO4);
+    motor_cathode_ledc_channel
+        .configure(channel::config::Config {
+            timer: &lstimer0,
+            duty_pct: 0,
+            drive_mode: DriveMode::PushPull,
+        })
+        .expect("Fail to configure motor cathode channel");
+
+    info!("initialized motor cathode ledc channel");
 
     loop {
         info!("Motor Forward Full");
-        motor_anode_ledc_channel.set_duty(100).expect("Failed to set duty anode 1");
-        motor_cathode_ledc_channel.set_duty(0).expect("Failed to set duty cathode 1");
+        motor_anode_ledc_channel.set_duty_hw(4095);
+        motor_cathode_ledc_channel.set_duty_hw(0);
         delay.delay_millis(2000);
         info!("Motor reverse Full");
-        motor_anode_ledc_channel.set_duty(0).expect("Failed to set duty anode 2");
-        motor_cathode_ledc_channel.set_duty(100).expect("Failed to set duty cathode 2");
+        motor_anode_ledc_channel.set_duty_hw(0);
+        motor_cathode_ledc_channel.set_duty_hw(4095);
         delay.delay_millis(2000);
         info!("Motor Forward 25%");
-        motor_anode_ledc_channel.set_duty(25).expect("Failed to set duty anode 3");
-        motor_cathode_ledc_channel.set_duty(0).expect("Failed to set duty cathode 3");
+        motor_anode_ledc_channel.set_duty_hw(1000);
+        motor_cathode_ledc_channel.set_duty_hw(0);
         delay.delay_millis(2000);
         info!("Motor Forward 50%");
-        motor_anode_ledc_channel.set_duty(50).expect("Failed to set duty anode 4");
-        motor_cathode_ledc_channel.set_duty(0).expect("Failed to set duty cathode 4");
+        motor_anode_ledc_channel.set_duty_hw(2000);
+        motor_cathode_ledc_channel.set_duty_hw(0);
         delay.delay_millis(2000);
         info!("Motor Forward 75%");
-        motor_anode_ledc_channel.set_duty(75).expect("Failed to set duty anode 5");
-        motor_cathode_ledc_channel.set_duty(0).expect("Failed to set duty cathode 5");
+        motor_anode_ledc_channel.set_duty_hw(3000);
+        motor_cathode_ledc_channel.set_duty_hw(0);
         delay.delay_millis(2000);
         info!("Motor Reverse 25%");
-        motor_anode_ledc_channel.set_duty(0).expect("Failed to set duty anode 6");
-        motor_cathode_ledc_channel.set_duty(25).expect("Failed to set duty cathode 6");
+        motor_anode_ledc_channel.set_duty_hw(0);
+        motor_cathode_ledc_channel.set_duty_hw(1000);
         delay.delay_millis(2000);
         info!("Motor Reverse 50%");
-        motor_anode_ledc_channel.set_duty(0).expect("Failed to set duty anode 7");
-        motor_cathode_ledc_channel.set_duty(50).expect("Failed to set duty cathode 7");
+        motor_anode_ledc_channel.set_duty_hw(0);
+        motor_cathode_ledc_channel.set_duty_hw(2000);
         delay.delay_millis(2000);
         info!("Motor Reverse 75%");
-        motor_anode_ledc_channel.set_duty(0).expect("Failed to set duty anode 8");
-        motor_cathode_ledc_channel.set_duty(75).expect("Failed to set duty cathode 8");
+        motor_anode_ledc_channel.set_duty_hw(0);
+        motor_cathode_ledc_channel.set_duty_hw(3000);
         delay.delay_millis(2000);
     }
 
