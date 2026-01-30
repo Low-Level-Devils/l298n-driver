@@ -9,12 +9,9 @@
 
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
-use esp_hal::gpio::*;
-use esp_hal::ledc::channel::{ChannelHW, ChannelIFace};
-use esp_hal::ledc::timer::TimerIFace;
 use esp_hal::ledc::*;
 use esp_hal::main;
-use esp_hal::time::Rate;
+use l298n_driver::l298n_control::{self, L298n};
 use log::info;
 
 #[panic_handler]
@@ -41,76 +38,42 @@ fn main() -> ! {
 
     let delay = Delay::new();
 
-    let mut ledc = Ledc::new(peripherals.LEDC);
-    ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
+    let l298n_ledc = l298n_control::initialize_ledc(peripherals.LEDC);
+    let l298n_lstimer = l298n_control::initialize_lstimer(&l298n_ledc);
 
-    info!("initialized ledc");
-
-    let mut lstimer0 = ledc.timer::<LowSpeed>(timer::Number::Timer0);
-    lstimer0
-        .configure(timer::config::Config {
-            duty: timer::config::Duty::Duty12Bit,
-            clock_source: timer::LSClockSource::APBClk,
-            frequency: Rate::from_hz(10000),
-        })
-        .expect("Error configuring lstimer");
-
-    info!("initialized lstimer");
-
-    let mut motor_anode_ledc_channel = ledc.channel(channel::Number::Channel0, peripherals.GPIO2);
-    motor_anode_ledc_channel
-        .configure(channel::config::Config {
-            timer: &lstimer0,
-            duty_pct: 0,
-            drive_mode: DriveMode::PushPull,
-        })
-        .expect("Fail to configure motor anode channel");
-
-    info!("initialized motor anode ledc channel");
-
-    let mut motor_cathode_ledc_channel = ledc.channel(channel::Number::Channel1, peripherals.GPIO4);
-    motor_cathode_ledc_channel
-        .configure(channel::config::Config {
-            timer: &lstimer0,
-            duty_pct: 0,
-            drive_mode: DriveMode::PushPull,
-        })
-        .expect("Fail to configure motor cathode channel");
-
-    info!("initialized motor cathode ledc channel");
+    let l298n_module = L298n::new(
+        &l298n_ledc,
+        &l298n_lstimer,
+        channel::Number::Channel0,
+        peripherals.GPIO2.into(),
+        channel::Number::Channel1,
+        peripherals.GPIO4.into(),
+    );
 
     loop {
         info!("Motor Forward Full");
-        motor_anode_ledc_channel.set_duty_hw(4095);
-        motor_cathode_ledc_channel.set_duty_hw(0);
+        l298n_module.change_speed(100);
         delay.delay_millis(2000);
         info!("Motor reverse Full");
-        motor_anode_ledc_channel.set_duty_hw(0);
-        motor_cathode_ledc_channel.set_duty_hw(4095);
+        l298n_module.change_speed(-100);
         delay.delay_millis(2000);
         info!("Motor Forward 25%");
-        motor_anode_ledc_channel.set_duty_hw(1000);
-        motor_cathode_ledc_channel.set_duty_hw(0);
+        l298n_module.change_speed(25);
         delay.delay_millis(2000);
         info!("Motor Forward 50%");
-        motor_anode_ledc_channel.set_duty_hw(2000);
-        motor_cathode_ledc_channel.set_duty_hw(0);
+        l298n_module.change_speed(50);
         delay.delay_millis(2000);
         info!("Motor Forward 75%");
-        motor_anode_ledc_channel.set_duty_hw(3000);
-        motor_cathode_ledc_channel.set_duty_hw(0);
+        l298n_module.change_speed(75);
         delay.delay_millis(2000);
         info!("Motor Reverse 25%");
-        motor_anode_ledc_channel.set_duty_hw(0);
-        motor_cathode_ledc_channel.set_duty_hw(1000);
+        l298n_module.change_speed(-25);
         delay.delay_millis(2000);
         info!("Motor Reverse 50%");
-        motor_anode_ledc_channel.set_duty_hw(0);
-        motor_cathode_ledc_channel.set_duty_hw(2000);
+        l298n_module.change_speed(-50);
         delay.delay_millis(2000);
         info!("Motor Reverse 75%");
-        motor_anode_ledc_channel.set_duty_hw(0);
-        motor_cathode_ledc_channel.set_duty_hw(3000);
+        l298n_module.change_speed(-75);
         delay.delay_millis(2000);
     }
 

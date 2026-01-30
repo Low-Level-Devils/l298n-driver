@@ -12,7 +12,7 @@ This Rust based driver is for controlling DC motors via L298N Module
 
 ## Connections
 > [!NOTE]
-> This setup assumes the user wants the motors in sync. For asyncronous operations use different GPIO
+> This setup assumes the user wants the motors in sync. A driver allowing split operations is in the works.
 > pins for motor 2.
 
 ### ESP32
